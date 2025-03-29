@@ -56,14 +56,28 @@ async def handle_message(message: types.Message):
         logging.error(f"Ошибка: {e}")
         await message.reply("⚠️ Произошла ошибка. Попробуйте позже.")
 
-# ======== Запуск ========
+# ======== Запуск с обработкой конфликтов ========
 async def main():
-    # Запускаем Flask
+    # Запускаем Flask в отдельном потоке
     Thread(target=lambda: app.run(host='0.0.0.0', port=8080), daemon=True).start()
 
-    # Запускаем бота
-    logging.info("Бот запущен и работает на Render")
-    await dp.start_polling(bot)
+    # Запускаем бота с улучшенной обработкой ошибок
+    logging.info("Запуск бота с защитой от конфликтов...")
+    try:
+        await dp.start_polling(
+            bot,
+            none_stop=True,  # Игнорировать временные ошибки
+            allowed_updates=dp.resolve_used_update_types(),  # Оптимизация запросов
+            timeout=60  # Таймаут для ожидания обновлений
+        )
+    except Exception as e:
+        logging.critical(f"Критическая ошибка: {e}")
+    finally:
+        await (await bot.get_session()).close()  # Корректное закрытие сессии
+        logging.info("Бот остановлен")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logging.info("Принудительная остановка")
