@@ -13,7 +13,6 @@ from threading import Thread
 API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 
-# Глобальные переменные объявлены в начале
 session = None
 bot = None
 dp = None
@@ -30,66 +29,67 @@ def init_bot():
     global session, bot, dp
     session = AiohttpSession()
     bot = Bot(token=API_TOKEN, session=session,
-            default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp = Dispatcher()
+              default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    dp = Dispatcher()  # Создаём новый Dispatcher
 
-# ======== Обработчики ========
+init_bot()  # Вызываем init_bot() ДО объявления обработчиков!
+
+# ======== Обработчики сообщений ========
 @dp.message()
 async def handle_message(message: types.Message):
-    # Ваша логика обработки сообщений
-    pass
+    pass  # Здесь логика обработки сообщений
 
-# ======== Полный сброс вебхука ========
+# ======== Жесткий сброс ========
 async def hard_reset():
-    """Принудительный сброс всех подключений"""
+    global session, bot, dp
     try:
-        if bot and not bot.is_closed():
+        if bot and not bot.session.closed:
             await bot.session.close()
         
-        # HTTP-запросы для гарантированного сброса
-        requests.post(
-            f"https://api.telegram.org/bot{API_TOKEN}/deleteWebhook",
-            params={'drop_pending_updates': True},
-            timeout=5
-        )
-        requests.post(
-            f"https://api.telegram.org/bot{API_TOKEN}/close",
-            timeout=5
-        )
-        
-        # Инициализация новой сессии
-        init_bot()
+        try:
+            requests.post(f"https://api.telegram.org/bot{API_TOKEN}/deleteWebhook",
+                          params={'drop_pending_updates': True}, timeout=5)
+            requests.post(f"https://api.telegram.org/bot{API_TOKEN}/close", timeout=5)
+        except requests.RequestException as e:
+            logging.error(f"Ошибка сброса вебхука: {e}")
+
+        # Пересоздание бота
+        session = AiohttpSession()
+        bot = Bot(token=API_TOKEN, session=session,
+                  default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+        dp = Dispatcher()
+
         await asyncio.sleep(3)
     except Exception as e:
         logging.error(f"Reset error: {e}")
 
-# ======== Запуск ========
+# ======== Запуск бота ========
 async def run_bot():
     await hard_reset()
     
     try:
         await dp.start_polling(
             bot,
-            none_stop=True,
-            allowed_updates=dp.resolve_used_update_types(),
+            allowed_updates=None,
             timeout=30,
             relax=0.5
         )
     finally:
-        if not bot.is_closed():
+        if not bot.session.closed:
             await bot.session.close()
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
 
 async def main():
-    init_bot()  # Инициализация бота
     Thread(target=run_flask, daemon=True).start()
     await run_bot()
 
 if __name__ == "__main__":
-    # Дополнительный жесткий сброс при старте
-    requests.post(f"https://api.telegram.org/bot{API_TOKEN}/deleteWebhook",
-                params={'drop_pending_updates': True})
+    try:
+        requests.post(f"https://api.telegram.org/bot{API_TOKEN}/deleteWebhook",
+                      params={'drop_pending_updates': True}, timeout=5)
+    except requests.RequestException as e:
+        logging.error(f"Ошибка при запуске: {e}")
     
     asyncio.run(main())
