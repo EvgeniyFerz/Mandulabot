@@ -2,9 +2,11 @@ import logging
 import os
 import asyncio
 import datetime
+import requests
 from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from flask import Flask
 from threading import Thread
 
@@ -31,7 +33,9 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 
-bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+# Создаем новую сессию с уникальными параметрами
+session = AiohttpSession(api_timeout=30)
+bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML), session=session)
 dp = Dispatcher()
 
 # ======== Обработчики сообщений ========
@@ -59,33 +63,44 @@ async def handle_message(message: types.Message):
         await message.reply("⚠️ Произошла ошибка. Попробуйте позже.")
 
 # ======== Запуск с полной защитой ========
+async def reset_telegram_session():
+    """Принудительный сброс всех предыдущих подключений"""
+    try:
+        # Закрываем все возможные предыдущие сессии
+        await bot.session.close()
+        await asyncio.sleep(2)
+        
+        # Сбрасываем webhook и updates через Telegram API
+        await bot.delete_webhook(drop_pending_updates=True)
+        await bot.get_updates(offset=-1)
+        
+        # Дополнительный HTTP-сброс
+        requests.post(f"https://api.telegram.org/bot{API_TOKEN}/close", timeout=5)
+    except Exception as e:
+        logging.warning(f"Ошибка при сбросе сессии: {e}")
+
 async def bot_runner():
-    """Основной цикл работы бота с защитой от сбоев"""
+    """Основной цикл работы бота"""
+    await reset_telegram_session()
+    
     while True:
         try:
-            # Очистка предыдущего состояния
-            await bot.delete_webhook(drop_pending_updates=True)
-            await bot.get_updates(offset=-1)  # Сброс очереди обновлений
-            
-            # Запуск поллинга с защитными параметрами
+            logging.info("Запуск бота с новым экземпляром сессии...")
             await dp.start_polling(
                 bot,
                 none_stop=True,
                 allowed_updates=dp.resolve_used_update_types(),
-                timeout=30,
-                relax=0.5,
-                reset_webhook=True,
-                close_bot_session=True
+                timeout=25,
+                relax=0.3,
+                reset_webhook=True
             )
         except asyncio.CancelledError:
             logging.info("Получен сигнал остановки")
             break
         except Exception as e:
             logging.critical(f"Критическая ошибка: {type(e).__name__}: {e}", exc_info=True)
-            await asyncio.sleep(10)  # Пауза перед перезапуском
-        finally:
-            if not bot.is_closed():
-                await bot.session.close()
+            await asyncio.sleep(10)
+            await reset_telegram_session()
 
 async def main():
     """Главная функция инициализации"""
@@ -96,17 +111,22 @@ async def main():
     )
     flask_thread.start()
 
-    # Запуск бота с защитой от перезагрузок
-    logging.info("🚀 Бот запускается с защитой от конфликтов...")
+    # Основной цикл работы
     try:
         await bot_runner()
     finally:
-        logging.info("Завершение работы бота...")
-        if not bot.is_closed():
-            await bot.session.close()
+        logging.info("Завершение работы...")
+        await bot.session.close()
         await asyncio.sleep(1)
 
 if __name__ == "__main__":
+    # Принудительный сброс через API при старте
+    try:
+        requests.post(f"https://api.telegram.org/bot{API_TOKEN}/deleteWebhook", timeout=3)
+        requests.post(f"https://api.telegram.org/bot{API_TOKEN}/close", timeout=3)
+    except:
+        pass
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
