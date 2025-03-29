@@ -1,11 +1,11 @@
 import logging
 import os
 import asyncio
+import datetime
 import requests
 from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
-from aiogram.client.session.aiohttp import AiohttpSession
 from flask import Flask
 from threading import Thread
 import time
@@ -13,139 +13,72 @@ import time
 # ======== Конфигурация ========
 API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
-
-# Глобальные переменные
-bot_instance = None
-dp_instance = None
-
-# ======== Инициализация ========
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
-)
-
-app = Flask(__name__)
-
-def initialize_bot():
-    """Инициализация бота с уникальной сессией"""
-    global bot_instance, dp_instance
-    
-    # Закрываем предыдущую сессию если существует
-    if bot_instance and not bot_instance.is_closed:
-        try:
-            asyncio.get_event_loop().run_until_complete(bot_instance.close())
-        except:
-            pass
-    
-    # Создаем новую сессию с уникальным ID
-    session = AiohttpSession()
-    bot_instance = Bot(
-        token=API_TOKEN,
-        session=session,
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
-    )
-    dp_instance = Dispatcher()
-
-    # Регистрация обработчиков
-    @dp_instance.message()
-    async def handle_message(message: types.Message):
-        # Ваша логика обработки сообщений
-        pass
-
-# ======== Полный сброс соединения ========
-async def hard_reset():
-    """Полный сброс всех соединений с Telegram"""
-    try:
-        # 1. Закрываем текущую сессию
-        if bot_instance and not bot_instance.is_closed:
-            await bot_instance.close()
-            await asyncio.sleep(2)
-        
-        # 2. HTTP-сброс через API
-        for _ in range(3):  # 3 попытки
-            try:
-                requests.post(
-                    f"https://api.telegram.org/bot{API_TOKEN}/deleteWebhook",
-                    params={'drop_pending_updates': True},
-                    timeout=5
-                )
-                requests.post(
-                    f"https://api.telegram.org/bot{API_TOKEN}/close",
-                    timeout=5
-                )
-                break
-            except:
-                await asyncio.sleep(1)
-        
-        # 3. Полная переинициализация
-        initialize_bot()
-        await asyncio.sleep(3)
-        
-    except Exception as e:
-        logging.critical(f"HARD RESET ERROR: {e}")
-
-# ======== Защищенный запуск бота ========
-async def run_polling():
-    """Основной цикл работы с защитой от конфликтов"""
-    await hard_reset()
-    
-    restart_count = 0
-    while restart_count < 5:  # Максимум 5 перезапусков
-        try:
-            logging.info(f"Starting polling (attempt {restart_count + 1})")
-            await dp_instance.start_polling(
-                bot_instance,
-                none_stop=True,
-                timeout=25,
-                relax=0.3,
-                reset_webhook=True,
-                allowed_updates=types.Update.ALL_TYPES
-            )
-        except asyncio.CancelledError:
-            break
-        except Exception as e:
-            logging.error(f"Polling error: {e}")
-            restart_count += 1
-            await hard_reset()
-            await asyncio.sleep(5)
-        else:
-            break
+REPLIT_URL = "https://mandulabot.onrender.com/"  # Ваш публичный URL
 
 # ======== Flask сервер ========
-def run_flask():
-    app.run(host='0.0.0.0', port=8080, debug=False, use_reloader=False)
+app = Flask(__name__)
 
-# ======== Главная функция ========
+@app.route('/')
+def home():
+    return f"""
+    <h1>Бот @Mandula_robot активен</h1>
+    <p>Последняя активность: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    <p>Статус: <span style="color:green;">✔ Онлайн</span></p>
+    """
+
+# ======== Автопинг ========
+def keep_alive():
+    while True:
+        try:
+            requests.get(REPLIT_URL, timeout=5)
+            logging.info("Пинг отправлен для поддержания активности")
+        except Exception as e:
+            logging.warning(f"Ошибка пинга: {e}")
+        time.sleep(300)  # Пинг каждые 5 минут
+
+# ======== Инициализация бота ========
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+dp = Dispatcher()
+
+# ======== Обработчики сообщений ========
+@dp.message()
+async def handle_message(message: types.Message):
+    try:
+        if message.chat.type != "private":
+            return
+
+        user = message.from_user
+        username = f"@{user.username}" if user.username else "без username"
+        user_info = f"👤 {user.full_name} ({username})"
+
+        if message.text:
+            await bot.send_message(CHANNEL_ID, f"📩 Сообщение\n\n{user_info}\n\n{message.text}")
+        elif message.photo:
+            await bot.send_photo(CHANNEL_ID, message.photo[-1].file_id, caption=f"📷 Фото\n\n{user_info}")
+        elif message.document:
+            await bot.send_document(CHANNEL_ID, message.document.file_id, caption=f"📄 Документ\n\n{user_info}")
+
+        await message.reply("✅ Ваше сообщение переслано администратору!")
+
+    except Exception as e:
+        logging.error(f"Ошибка: {e}")
+        await message.reply("⚠️ Произошла ошибка. Попробуйте позже.")
+
+# ======== Запуск ========
 async def main():
-    initialize_bot()
-    
-    # Запускаем Flask в отдельном потоке
-    flask_thread = Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-    
-    # Основной цикл работы бота
-    await run_polling()
-    
-    # Корректное завершение
-    if bot_instance and not bot_instance.is_closed:
-        await bot_instance.close()
+    # Запускаем Flask
+    Thread(target=lambda: app.run(host='0.0.0.0', port=8080), daemon=True).start()
+
+    # Запускаем автопинг
+    Thread(target=keep_alive, daemon=True).start()
+
+    # Запускаем бота
+    logging.info("Бот запущен и работает 24/7")
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    # Принудительный сброс при старте
-    try:
-        requests.post(
-            f"https://api.telegram.org/bot{API_TOKEN}/deleteWebhook",
-            params={'drop_pending_updates': True},
-            timeout=5
-        )
-    except:
-        pass
-    
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logging.info("Bot stopped by user")
-    except Exception as e:
-        logging.critical(f"Fatal error: {e}")
-    finally:
-        logging.info("Shutdown completed")
+    asyncio.run(main())
