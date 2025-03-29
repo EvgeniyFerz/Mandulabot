@@ -13,6 +13,11 @@ from threading import Thread
 API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 
+# Глобальные переменные объявлены в начале
+session = None
+bot = None
+dp = None
+
 # ======== Инициализация ========
 logging.basicConfig(
     level=logging.INFO,
@@ -20,10 +25,13 @@ logging.basicConfig(
 )
 
 app = Flask(__name__)
-session = AiohttpSession()
-bot = Bot(token=API_TOKEN, session=session, 
-          default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-dp = Dispatcher()
+
+def init_bot():
+    global session, bot, dp
+    session = AiohttpSession()
+    bot = Bot(token=API_TOKEN, session=session,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    dp = Dispatcher()
 
 # ======== Обработчики ========
 @dp.message()
@@ -35,10 +43,10 @@ async def handle_message(message: types.Message):
 async def hard_reset():
     """Принудительный сброс всех подключений"""
     try:
-        # 1. Закрываем текущую сессию
-        await bot.session.close()
+        if bot and not bot.is_closed():
+            await bot.session.close()
         
-        # 2. HTTP-запросы для гарантированного сброса
+        # HTTP-запросы для гарантированного сброса
         requests.post(
             f"https://api.telegram.org/bot{API_TOKEN}/deleteWebhook",
             params={'drop_pending_updates': True},
@@ -49,19 +57,15 @@ async def hard_reset():
             timeout=5
         )
         
-        # 3. Новая сессия
-        global session, bot
-        session = AiohttpSession()
-        bot = Bot(token=API_TOKEN, session=session,
-                default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-        
+        # Инициализация новой сессии
+        init_bot()
         await asyncio.sleep(3)
     except Exception as e:
         logging.error(f"Reset error: {e}")
 
 # ======== Запуск ========
 async def run_bot():
-    await hard_reset()  # Важный сброс!
+    await hard_reset()
     
     try:
         await dp.start_polling(
@@ -72,12 +76,14 @@ async def run_bot():
             relax=0.5
         )
     finally:
-        await bot.session.close()
+        if not bot.is_closed():
+            await bot.session.close()
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
 
 async def main():
+    init_bot()  # Инициализация бота
     Thread(target=run_flask, daemon=True).start()
     await run_bot()
 
