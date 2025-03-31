@@ -6,6 +6,7 @@ import requests
 from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from aiogram.utils import executor
 from flask import Flask
 from threading import Thread
 import time
@@ -13,7 +14,7 @@ import time
 # ======== Конфигурация ========
 API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
-REPLIT_URL = "https://mandulabot.onrender.com/"  # Ваш публичный URL
+RENDER_URL = "https://mandulabot.onrender.com"  # Обновленный URL
 
 # ======== Flask сервер ========
 app = Flask(__name__)
@@ -30,19 +31,20 @@ def home():
 def keep_alive():
     while True:
         try:
-            requests.get(REPLIT_URL, timeout=5)
+            requests.get(RENDER_URL, timeout=5)
             logging.info("Пинг отправлен для поддержания активности")
         except Exception as e:
             logging.warning(f"Ошибка пинга: {e}")
-        time.sleep(300)  # Пинг каждые 5 минут
+        time.sleep(300)
 
 # ======== Инициализация бота ========
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-dp = Dispatcher()
+dp = Dispatcher(bot)
 
 # ======== Обработчики сообщений ========
 @dp.message()
@@ -69,16 +71,18 @@ async def handle_message(message: types.Message):
         await message.reply("⚠️ Произошла ошибка. Попробуйте позже.")
 
 # ======== Запуск ========
-async def main():
-    # Запускаем Flask
-    Thread(target=lambda: app.run(host='0.0.0.0', port=8080), daemon=True).start()
-
-    # Запускаем автопинг
-    Thread(target=keep_alive, daemon=True).start()
-
-    # Запускаем бота
-    logging.info("Бот запущен и работает 24/7")
-    await dp.start_polling(bot)
+def run_flask():
+    app.run(host='0.0.0.0', port=8080)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Запускаем Flask и автопинг в отдельных потоках
+    Thread(target=run_flask, daemon=True).start()
+    Thread(target=keep_alive, daemon=True).start()
+
+    # Специальные настройки для работы вместе с вебхуком
+    executor.start_polling(
+        dp,
+        skip_updates=True,  # Пропускаем сообщения, полученные во время простоя
+        relax=0.5,         # Уменьшаем нагрузку на сервер Telegram
+        timeout=30         # Таймаут соединения
+    )
