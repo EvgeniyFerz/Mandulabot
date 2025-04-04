@@ -3,19 +3,22 @@ import os
 import asyncio
 import datetime
 import requests
-from aiogram import Bot, Dispatcher, types
+import time
+from threading import Thread
+from flask import Flask
+
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
-from flask import Flask
-from threading import Thread
-import time
+from aiogram.filters import CommandStart
+from aiogram.types import Message
 
 # ======== Конфигурация ========
 API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
-REPLIT_URL = "https://mandulabot.onrender.com/"  # Ваш публичный URL
+REPLIT_URL = "https://mandulabot.onrender.com/"  # Публичный URL
 
-# ======== Flask сервер ========
+# ======== Flask-сервер ========
 app = Flask(__name__)
 
 @app.route('/')
@@ -36,17 +39,13 @@ def keep_alive():
             logging.warning(f"Ошибка пинга: {e}")
         time.sleep(300)  # Пинг каждые 5 минут
 
-# ======== Инициализация бота ========
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
+# ======== Логирование и инициализация ========
+logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# ======== Обработчик /start ========
-@dp.message(commands=["start"])
-async def handle_start(message: types.Message):
+# ======== Хендлер /start ========
+async def handle_start(message: Message):
     welcome_text = (
         "Это бот <b>Mandula corporation</b> (https://t.me/mandula_corporation) — объединение админов ЖЦА-психологии и саморазвития.\n\n"
         "Напишите в одном сообщении:\n"
@@ -56,9 +55,8 @@ async def handle_start(message: types.Message):
     )
     await message.reply(welcome_text)
 
-# ======== Обработчики сообщений ========
-@dp.message()
-async def handle_message(message: types.Message):
+# ======== Хендлер на все входящие сообщения ========
+async def handle_message(message: Message):
     try:
         if message.chat.type != "private":
             return
@@ -80,9 +78,13 @@ async def handle_message(message: types.Message):
         logging.error(f"Ошибка: {e}")
         await message.reply("⚠️ Произошла ошибка. Попробуйте позже.")
 
+# ======== Регистрация хендлеров ========
+dp.message.register(handle_start, CommandStart())
+dp.message.register(handle_message, F.chat.type == "private")
+
 # ======== Запуск ========
 async def main():
-    # Запускаем Flask
+    # Запускаем Flask-сервер
     Thread(target=lambda: app.run(host='0.0.0.0', port=8080), daemon=True).start()
 
     # Запускаем автопинг
