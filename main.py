@@ -44,6 +44,18 @@ logging.basicConfig(
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
+# ======== Обработчик /start ========
+@dp.message(commands=["start"])
+async def handle_start(message: types.Message):
+    welcome_text = (
+        "Это бот <b>Mandula corporation</b> (https://t.me/mandula_corporation) — объединение админов ЖЦА-психологии и саморазвития.\n\n"
+        "Напишите в одном сообщении:\n"
+        "- ссылку на ваш канал\n"
+        "- что хотите взять (лента, рассылка, сториз)\n"
+        "- где хотите взять — во всех каналах или только в некоторых"
+    )
+    await message.reply(welcome_text)
+
 # ======== Обработчики сообщений ========
 @dp.message()
 async def handle_message(message: types.Message):
