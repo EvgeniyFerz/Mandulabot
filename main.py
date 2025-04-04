@@ -3,6 +3,7 @@ import logging
 import asyncio
 import datetime
 import requests
+import time
 
 from flask import Flask, request
 
@@ -15,7 +16,7 @@ from aiogram.types import Update
 # ======== Конфигурация ========
 API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
-WEBHOOK_HOST = os.getenv("REPLIT_URL")  # или https://название-проекта.onrender.com
+WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 
@@ -28,7 +29,11 @@ app = Flask(__name__)
 # ======== Flask маршруты ========
 @app.route("/")
 def index():
-    return f"<h1>Бот @Mandula_robot на Webhook</h1><p>{datetime.datetime.now()}</p>"
+    return f"""
+    <h1>Бот @Mandula_robot активен</h1>
+    <p>Последняя активность: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    <p>Статус: <span style="color:green;">✔ Онлайн</span></p>
+    """
 
 @app.route(WEBHOOK_PATH, methods=["POST"])
 async def webhook():
@@ -39,6 +44,16 @@ async def webhook():
     except Exception as e:
         logging.error(f"Ошибка при обработке webhook: {e}")
     return {"status": "ok"}
+
+# ======== Автопинг ========
+async def keep_alive():
+    while True:
+        try:
+            requests.get(WEBHOOK_HOST)
+            logging.info("✅ Пинг отправлен для поддержания активности")
+        except Exception as e:
+            logging.warning(f"⚠️ Ошибка пинга: {e}")
+        await asyncio.sleep(300)  # Каждые 5 минут
 
 # ======== Хендлеры ========
 async def handle_start(message: types.Message):
@@ -72,14 +87,25 @@ async def handle_message(message: types.Message):
 dp.message.register(handle_start, CommandStart())
 dp.message.register(handle_message, F.chat.type == "private")
 
-# ======== Установка Webhook и запуск ========
+# ======== Запуск ========
 async def on_startup():
     await bot.set_webhook(WEBHOOK_URL)
-    logging.info(f"Webhook установлен: {WEBHOOK_URL}")
+    logging.info(f"✅ Webhook установлен: {WEBHOOK_URL}")
 
 async def main():
     await on_startup()
-    app.run(host="0.0.0.0", port=8080)
+
+    # Запуск Flask-сервера
+    loop = asyncio.get_running_loop()
+    from threading import Thread
+    Thread(target=lambda: app.run(host="0.0.0.0", port=8080), daemon=True).start()
+
+    # Запуск автопинга
+    asyncio.create_task(keep_alive())
+
+    # Постоянное ожидание
+    while True:
+        await asyncio.sleep(3600)
 
 if __name__ == "__main__":
     asyncio.run(main())
