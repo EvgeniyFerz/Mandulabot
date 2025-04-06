@@ -2,3 +2,4 @@ aiogram>=3.0
 python-dotenv
 flask
 requests>=2.31.0
+flask[async]>=2.0.0
