@@ -7,7 +7,7 @@ from threading import Thread
 import requests
 from flask import Flask
 from telegram import Bot
-from telegram.ext import Application, Dispatcher
+from telegram.ext import Application
 
 from config import TOKEN, RENDER_URL
 from handlers import setup_handlers
@@ -56,4 +56,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
