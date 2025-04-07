@@ -9,7 +9,7 @@ from flask import Flask
 from telegram import Bot
 from telegram.ext import Application
 
-from config import TOKEN, RENDER_URL
+from config import TELEGRAM_BOT_TOKEN, WEBHOOK_HOST
 from handlers import setup_handlers
 
 # Настройка логгирования
@@ -38,8 +38,8 @@ def keep_alive():
 
 # Основной запуск бота
 async def main():
-    bot = Bot(token=TOKEN)
-    application = Application.builder().token(TOKEN).build()
+    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
     # Подключаем хендлеры
     setup_handlers(application)
