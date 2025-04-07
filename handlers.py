@@ -6,7 +6,9 @@ from telegram.ext import (
     filters
 )
 
-from . import commands, callbacks, messages
+import commands
+import callbacks
+import messages
 
 def setup_handlers(app: Application):
     # Команды
