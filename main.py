@@ -1,73 +1,58 @@
+import asyncio
 import logging
 import os
-import time  # заменили asyncio.sleep на time.sleep
-import asyncio
-import requests
-from aiogram import Bot, Dispatcher, types
-from aiogram.client.default import DefaultBotProperties
-from flask import Flask
+import time
 from threading import Thread
 
-# Конфигурация
-API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
-RENDER_URL = "https://mandulabot.onrender.com"
+import requests
+from flask import Flask
+from telegram import Bot
+from telegram.ext import Application, Dispatcher
 
+from config import TOKEN, RENDER_URL
+from handlers import setup_handlers
+
+# Настройка логгирования
+logging.basicConfig(level=logging.INFO)
+
+# Flask приложение
 app = Flask(__name__)
-bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
-dp = Dispatcher()
-
-async def reset_connection():
-    """Полный сброс всех подключений"""
-    try:
-        await bot.delete_webhook(drop_pending_updates=True)
-        await bot.session.close()
-    except:
-        pass
-    try:
-        requests.post(f"https://api.telegram.org/bot{API_TOKEN}/deleteWebhook")
-    except:
-        pass
 
 @app.route('/')
-def home():
-    return "Бот активен"
+def index():
+    return 'Бот работает!'
 
+def run_flask():
+    app.run(host='0.0.0.0', port=8080)
+
+# Поддержание активности на Render
 def keep_alive():
+    logging.info("Запускаю keep_alive")
     while True:
         try:
             requests.get(RENDER_URL, timeout=5)
+            logging.info("Ping sent to keep alive")
         except Exception as e:
             logging.warning(f"Ошибка при keep_alive: {e}")
-        time.sleep(300)  # Пауза 5 минут
+        time.sleep(300)
 
-@dp.message()
-async def handle_message(message: types.Message):
-    try:
-        if message.chat.type == "private":
-            await bot.send_message(
-                CHANNEL_ID,
-                f"📩 Сообщение от {message.from_user.full_name}:\n{message.text}"
-            )
-            await message.reply("✅ Переслано администратору")
-    except Exception as e:
-        logging.error(f"Ошибка при обработке сообщения: {e}")
-
+# Основной запуск бота
 async def main():
-    await reset_connection()
-    
-    # Запускаем Flask-сервер и keep_alive в отдельных потоках
-    Thread(target=lambda: app.run(host='0.0.0.0', port=8080), daemon=True).start()
+    bot = Bot(token=TOKEN)
+    application = Application.builder().token(TOKEN).build()
+
+    # Подключаем хендлеры
+    setup_handlers(application)
+
+    # Запускаем Flask и keep_alive в отдельных потоках
+    Thread(target=run_flask, daemon=True).start()
     Thread(target=keep_alive, daemon=True).start()
 
-    logging.info("Бот запущен")
-    await dp.start_polling(
-        bot,
-        skip_updates=True,
-        timeout=30,
-        relax=0.5
-    )
+    logging.info("Бот запускается...")
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()
+    await application.updater.idle()
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())
