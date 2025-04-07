@@ -3,3 +3,4 @@ python-dotenv
 flask
 requests>=2.31.0
 flask[async]>=2.0.0
+python-telegram-bot==20.7
