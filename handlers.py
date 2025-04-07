@@ -6,14 +6,20 @@ from telegram.ext import (
     filters
 )
 
-import commands
 import callbacks
 import messages
 
+# Функции для команд
+async def start(update, context):
+    await update.message.reply("Привет! Я ваш бот!")
+
+async def help_command(update, context):
+    await update.message.reply("Я помогу вам с чем угодно!")
+
 def setup_handlers(app: Application):
     # Команды
-    app.add_handler(CommandHandler("start", commands.start))
-    app.add_handler(CommandHandler("help", commands.help_command))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
 
     # Inline кнопки
     app.add_handler(CallbackQueryHandler(callbacks.button_handler))
