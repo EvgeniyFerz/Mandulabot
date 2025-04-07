@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Ваш токен бота
-TOKEN = os.getenv('TOKEN')
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
 # URL для keep-alive
-RENDER_URL = os.getenv('RENDER_URL')
+WEBHOOK_HOST = os.getenv('WEBHOOK_HOST')
