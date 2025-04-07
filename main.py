@@ -1,5 +1,6 @@
 import logging
 import os
+import time  # заменили asyncio.sleep на time.sleep
 import asyncio
 import requests
 from aiogram import Bot, Dispatcher, types
@@ -34,21 +35,28 @@ def home():
 
 def keep_alive():
     while True:
-        requests.get(RENDER_URL, timeout=5)
-        asyncio.sleep(300)
+        try:
+            requests.get(RENDER_URL, timeout=5)
+        except Exception as e:
+            logging.warning(f"Ошибка при keep_alive: {e}")
+        time.sleep(300)  # Пауза 5 минут
 
 @dp.message()
 async def handle_message(message: types.Message):
     try:
         if message.chat.type == "private":
-            await bot.send_message(CHANNEL_ID, f"📩 Сообщение от {message.from_user.full_name}:\n{message.text}")
+            await bot.send_message(
+                CHANNEL_ID,
+                f"📩 Сообщение от {message.from_user.full_name}:\n{message.text}"
+            )
             await message.reply("✅ Переслано администратору")
     except Exception as e:
-        logging.error(f"Ошибка: {e}")
+        logging.error(f"Ошибка при обработке сообщения: {e}")
 
 async def main():
-    await reset_connection()  # Важно: сброс перед запуском
+    await reset_connection()
     
+    # Запускаем Flask-сервер и keep_alive в отдельных потоках
     Thread(target=lambda: app.run(host='0.0.0.0', port=8080), daemon=True).start()
     Thread(target=keep_alive, daemon=True).start()
 
@@ -61,4 +69,5 @@ async def main():
     )
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())
