@@ -10,7 +10,7 @@ from threading import Thread
 # Конфигурация
 API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
-RENDER_URL = "https://mandulabot.onrender.com"
+RENDER_URL = "https://mandulabot-t5op.onrender.com"
 
 app = Flask(__name__)
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
