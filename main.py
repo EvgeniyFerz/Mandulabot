@@ -9,7 +9,8 @@ from threading import Thread
 
 # Конфигурация
 API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
+CHAT_ID = -1002011048351  # ID чата (супергруппы/канала)
+TOPIC_ID = 108214         # ID топика "Заявки с Мандулы"
 RENDER_URL = "https://mandulabot-t5op.onrender.com"
 
 app = Flask(__name__)
@@ -21,26 +22,23 @@ async def reset_connection():
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         await bot.session.close()
-    except:
-        pass
+    except Exception as e:
+        logging.error(f"Ошибка при сбросе соединения: {e}")
     try:
         requests.post(f"https://api.telegram.org/bot{API_TOKEN}/deleteWebhook")
-    except:
-        pass
+    except Exception as e:
+        logging.error(f"Ошибка при удалении вебхука: {e}")
 
 @app.route('/')
 def home():
     return "Бот активен"
 
 def keep_alive():
-    while True:
-        try:
-            requests.get(RENDER_URL, timeout=5)
-        except:
-            pass
-        asyncio.sleep(300)
+    """Поддержка работы на Render"""
+    app.run(host='0.0.0.0', port=8080)
 
 def format_user(user: types.User) -> str:
+    """Форматирование информации о пользователе"""
     if user.username:
         return f"@{user.username}"
     else:
@@ -49,19 +47,27 @@ def format_user(user: types.User) -> str:
 
 @dp.message()
 async def handle_message(message: types.Message):
+    """Обработка входящих сообщений"""
     try:
         if message.chat.type == "private":
             user_info = format_user(message.from_user)
             text_to_send = f"📩 Сообщение\n👤 {user_info}\n\n{message.text}"
-            await bot.send_message(CHANNEL_ID, text_to_send)
-            await message.reply("✅ Переслано администратору")
+            
+            # Отправка в указанный топик чата
+            await bot.send_message(
+                chat_id=CHAT_ID,
+                message_thread_id=TOPIC_ID,
+                text=text_to_send
+            )
+            await message.reply("✅ Сообщение отправлено в топик 'Заявки с Мандулы'")
     except Exception as e:
         logging.error(f"Ошибка: {e}")
 
 async def main():
-    await reset_connection()  # Важно: сброс перед запуском
+    """Основная функция запуска бота"""
+    await reset_connection()
 
-    Thread(target=lambda: app.run(host='0.0.0.0', port=8080), daemon=True).start()
+    # Запуск Flask в отдельном потоке
     Thread(target=keep_alive, daemon=True).start()
 
     logging.info("Бот запущен")
