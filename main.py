@@ -59,7 +59,7 @@ async def handle_message(message: types.Message):
                 message_thread_id=TOPIC_ID,
                 text=text_to_send
             )
-            await message.reply("✅ Сообщение отправлено админам @mandula_corporation. Напишите, что хотите купить")
+            await message.reply("✅ Сообщение отправлено в топик 'Заявки с Мандулы'")
     except Exception as e:
         logging.error(f"Ошибка: {e}")
 
