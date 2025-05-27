@@ -45,14 +45,6 @@ def format_user(user: types.User) -> str:
         full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
         return f"<a href='tg://user?id={user.id}'>{full_name}</a>"
 
-@dp.message(commands=["start"])
-async def cmd_start(message: types.Message):
-    """Обработка команды /start"""
-    await message.reply(
-        "Вы зарегистрировались в боте. А теперь напишите сообщение, что хотите купить. "
-        "Это сообщение получат все админы @mandula_corporation"
-    )
-
 @dp.message()
 async def handle_message(message: types.Message):
     """Обработка входящих сообщений"""
