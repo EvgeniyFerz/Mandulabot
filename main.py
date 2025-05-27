@@ -5,6 +5,7 @@ import requests
 from aiogram import Bot, Dispatcher, types
 from aiogram.client.default import DefaultBotProperties
 from aiogram.filters import Command
+from aiogram.enums import ParseMode
 from flask import Flask
 from threading import Thread
 
@@ -15,7 +16,7 @@ TOPIC_ID = 108214         # ID топика "Заявки с Мандулы"
 RENDER_URL = "https://mandulabot.onrender.com"
 
 app = Flask(__name__)
-bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
+bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
 async def reset_connection():
@@ -34,8 +35,8 @@ async def reset_connection():
 def home():
     return "Бот активен"
 
-def keep_alive():
-    """Поддержка работы на Render"""
+def run_flask():
+    """Запуск Flask сервера"""
     app.run(host='0.0.0.0', port=8080)
 
 def format_user(user: types.User) -> str:
@@ -49,7 +50,7 @@ def format_user(user: types.User) -> str:
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     """Обработка команды /start"""
-    await message.reply(
+    await message.answer(
         "Вы зарегистрировались в боте. А теперь напишите сообщение, что хотите купить. "
         "Это сообщение получат все админы @mandula_corporation"
     )
@@ -58,15 +59,10 @@ async def cmd_start(message: types.Message):
 async def handle_message(message: types.Message):
     """Обработка входящих сообщений"""
     try:
-        if message.chat.type == "private":
-            # Пропускаем команду /start, так как она уже обработана
-            if message.text and message.text.startswith('/'):
-                return
-                
+        if message.chat.type == "private" and not message.text.startswith('/'):
             user_info = format_user(message.from_user)
             text_to_send = f"📩 Сообщение\n👤 {user_info}\n\n{message.text}"
             
-            # Отправка в указанный топик чата
             await bot.send_message(
                 chat_id=CHAT_ID,
                 message_thread_id=TOPIC_ID,
@@ -76,22 +72,22 @@ async def handle_message(message: types.Message):
     except Exception as e:
         logging.error(f"Ошибка: {e}")
 
-async def main():
-    """Основная функция запуска бота"""
+async def run_bot():
+    """Запуск бота"""
     await reset_connection()
-
-    # Запуск Flask в отдельном потоке
-    Thread(target=keep_alive, daemon=True).start()
-
     logging.info("Бот запущен")
-    await dp.start_polling(
-        bot,
-        skip_updates=True,
-        allowed_updates=dp.resolve_used_update_types(),
-        timeout=30,
-        relax=0.5
-    )
+    await dp.start_polling(bot, skip_updates=True)
+
+def main():
+    """Основная функция запуска"""
+    logging.basicConfig(level=logging.INFO)
+    
+    # Запуск Flask в отдельном потоке
+    flask_thread = Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    
+    # Запуск бота в основном потоке
+    asyncio.run(run_bot())
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(main())
+    main()
