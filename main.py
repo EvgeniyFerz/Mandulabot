@@ -4,6 +4,7 @@ import asyncio
 import requests
 from aiogram import Bot, Dispatcher, types
 from aiogram.client.default import DefaultBotProperties
+from aiogram.filters import Command
 from flask import Flask
 from threading import Thread
 
@@ -45,11 +46,23 @@ def format_user(user: types.User) -> str:
         full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
         return f"<a href='tg://user?id={user.id}'>{full_name}</a>"
 
+@dp.message(Command("start"))
+async def cmd_start(message: types.Message):
+    """Обработка команды /start"""
+    await message.reply(
+        "Вы зарегистрировались в боте. А теперь напишите сообщение, что хотите купить. "
+        "Это сообщение получат все админы @mandula_corporation"
+    )
+
 @dp.message()
 async def handle_message(message: types.Message):
     """Обработка входящих сообщений"""
     try:
         if message.chat.type == "private":
+            # Пропускаем команду /start, так как она уже обработана
+            if message.text and message.text.startswith('/'):
+                return
+                
             user_info = format_user(message.from_user)
             text_to_send = f"📩 Сообщение\n👤 {user_info}\n\n{message.text}"
             
@@ -74,6 +87,7 @@ async def main():
     await dp.start_polling(
         bot,
         skip_updates=True,
+        allowed_updates=dp.resolve_used_update_types(),
         timeout=30,
         relax=0.5
     )
