@@ -11,7 +11,7 @@ from threading import Thread
 API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = -1002011048351  # ID чата (супергруппы/канала)
 TOPIC_ID = 108214         # ID топика "Заявки с Мандулы"
-RENDER_URL = "https://mandulabot.onrender.com"
+RENDER_URL = "https://mandulabot-t5op.onrender.com"
 
 app = Flask(__name__)
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
