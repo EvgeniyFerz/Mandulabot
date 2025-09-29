@@ -33,9 +33,15 @@ async def reset_connection():
 def home():
     return "Бот активен"
 
+@app.route('/health')
+def health():
+    """Эндпоинт для проверки здоровья приложения"""
+    return "OK", 200
+
 def keep_alive():
     """Поддержка работы на Render"""
-    app.run(host='0.0.0.0', port=8080)
+    port = int(os.environ.get("PORT", 10000))  # Render использует порт из переменной PORT
+    app.run(host='0.0.0.0', port=port)
 
 def format_user(user: types.User) -> str:
     """Форматирование информации о пользователе"""
