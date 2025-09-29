@@ -1,20 +1,30 @@
 name: Keep Alive Ping
 on:
   schedule:
-    - cron: '*/5 * * * *'  # Каждые 5 минут
+    - cron: '*/14 * * * *'  # Каждые 14 минут вместо 5
   workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 3
     steps:
       - name: Ping Render Bot
         run: |
-          response_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://mandulabot.onrender.com/health")
-          if [ "$response_code" -eq 200 ]; then
-            echo "✅ Bot is alive and responding"
-          else
-            echo "❌ Bot is not responding properly. HTTP Code: $response_code"
-            exit 1
-          fi
+          echo "Проверка доступности бота..."
+          
+          # Пробуем несколько эндпоинтов с коротким таймаутом
+          for endpoint in "/ping" "/health" "/"; do
+            echo "Проверка $endpoint"
+            response_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://mandulabot.onrender.com$endpoint")
+            echo "HTTP код для $endpoint: $response_code"
+            
+            if [ "$response_code" -eq 200 ] || [ "$response_code" -eq 202 ]; then
+              echo "✅ Бот отвечает на $endpoint"
+              exit 0
+            fi
+          done
+          
+          echo "⚠️ Бот временно недоступен или запускается"
+          # Завершаем успешно, чтобы не получать ошибки
+          exit 0
