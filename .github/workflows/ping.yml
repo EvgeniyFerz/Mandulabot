@@ -7,9 +7,14 @@ on:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 2  # Ждём до 2 минут ответа
+    timeout-minutes: 5
     steps:
       - name: Ping Render Bot
         run: |
-          # Ждём ответа до 60 секунд и проверяем код 200
-          curl --retry 3 --retry-delay 5 --max-time 60 --fail "https://mandulabot.onrender.com"
+          response_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://mandulabot.onrender.com/health")
+          if [ "$response_code" -eq 200 ]; then
+            echo "✅ Bot is alive and responding"
+          else
+            echo "❌ Bot is not responding properly. HTTP Code: $response_code"
+            exit 1
+          fi
